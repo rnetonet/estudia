@@ -48,8 +48,9 @@ function setupEventListeners() {
     document.getElementById('btn-import').addEventListener('change', importData);
     document.getElementById('btn-clear').addEventListener('click', clearAllData);
 
-    // Filtro de grafico
+    // Filtros de graficos
     document.getElementById('filter-materia').addEventListener('change', updateTimelineChart);
+    document.getElementById('filter-assunto-materia').addEventListener('change', updateAssuntosChart);
 
     // Busca no historico
     document.getElementById('search-history').addEventListener('input', renderHistory);
@@ -64,7 +65,6 @@ function handleFormSubmit(e) {
         materia: document.getElementById('materia').value.trim(),
         assunto: document.getElementById('assunto').value.trim(),
         prova: document.getElementById('prova').value.trim(),
-        mes: parseInt(document.getElementById('mes').value),
         ano: parseInt(document.getElementById('ano').value),
         createdAt: new Date().toISOString()
     };
@@ -156,9 +156,10 @@ function updateUI() {
 
 // Atualizar datalists para autocomplete
 function updateDataLists() {
-    const materias = [...new Set(errors.map(e => e.materia))];
-    const assuntos = [...new Set(errors.map(e => e.assunto))];
-    const provas = [...new Set(errors.map(e => e.prova))];
+    const materias = [...new Set(errors.map(e => e.materia))].sort();
+    const assuntos = [...new Set(errors.map(e => e.assunto))].sort();
+    const provas = [...new Set(errors.map(e => e.prova))].sort();
+    const anos = [...new Set(errors.map(e => e.ano))].sort((a, b) => b - a);
 
     document.getElementById('materias-list').innerHTML =
         materias.map(m => `<option value="${m}">`).join('');
@@ -166,18 +167,27 @@ function updateDataLists() {
         assuntos.map(a => `<option value="${a}">`).join('');
     document.getElementById('provas-list').innerHTML =
         provas.map(p => `<option value="${p}">`).join('');
+    document.getElementById('anos-list').innerHTML =
+        anos.map(a => `<option value="${a}">`).join('');
 }
 
 // Atualizar filtro de materias
 function updateMateriaFilter() {
     const materias = [...new Set(errors.map(e => e.materia))].sort();
-    const select = document.getElementById('filter-materia');
-    const currentValue = select.value;
 
-    select.innerHTML = '<option value="">Todas</option>' +
+    // Filtro do timeline
+    const selectTimeline = document.getElementById('filter-materia');
+    const currentValueTimeline = selectTimeline.value;
+    selectTimeline.innerHTML = '<option value="">Todas</option>' +
         materias.map(m => `<option value="${m}">${m}</option>`).join('');
+    selectTimeline.value = currentValueTimeline;
 
-    select.value = currentValue;
+    // Filtro do grafico de assuntos
+    const selectAssuntos = document.getElementById('filter-assunto-materia');
+    const currentValueAssuntos = selectAssuntos.value;
+    selectAssuntos.innerHTML = '<option value="">Selecione uma materia</option>' +
+        materias.map(m => `<option value="${m}">${m}</option>`).join('');
+    selectAssuntos.value = currentValueAssuntos;
 }
 
 // Renderizar historico
@@ -199,15 +209,13 @@ function renderHistory() {
     // Ordenar por data de criacao (mais recente primeiro)
     const sorted = [...filtered].sort((a, b) => b.id - a.id);
 
-    const meses = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
     container.innerHTML = sorted.map(error => `
         <div class="history-item">
             <div class="history-item-info">
                 <span class="history-item-materia">${escapeHtml(error.materia)}</span>
                 <span class="history-item-assunto"> - ${escapeHtml(error.assunto)}</span>
                 <div class="history-item-meta">
-                    ${escapeHtml(error.prova)} | ${meses[error.mes]}/${error.ano}
+                    ${escapeHtml(error.prova)} | ${error.ano}
                 </div>
             </div>
             <button class="history-item-delete" onclick="deleteError(${error.id})" title="Excluir">
@@ -242,6 +250,7 @@ function updateMateriasChart() {
         materiaCount[e.materia] = (materiaCount[e.materia] || 0) + 1;
     });
 
+    const total = errors.length;
     const labels = Object.keys(materiaCount).sort((a, b) => materiaCount[b] - materiaCount[a]);
     const data = labels.map(l => materiaCount[l]);
 
@@ -267,7 +276,32 @@ function updateMateriasChart() {
                     position: 'bottom',
                     labels: {
                         padding: 20,
-                        usePointStyle: true
+                        usePointStyle: true,
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const value = data.datasets[0].data[i];
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return {
+                                        text: `${label} (${percentage}%)`,
+                                        fillStyle: data.datasets[0].backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${context.label}: ${value} erros (${percentage}%)`;
+                        }
                     }
                 }
             }
@@ -278,11 +312,21 @@ function updateMateriasChart() {
 // Grafico de erros por assunto
 function updateAssuntosChart() {
     const ctx = document.getElementById('chart-assuntos').getContext('2d');
+    const filterMateria = document.getElementById('filter-assunto-materia').value;
+
+    // Filtrar erros pela materia selecionada
+    let filteredErrors = errors;
+    if (filterMateria) {
+        filteredErrors = errors.filter(e => e.materia === filterMateria);
+    }
 
     const assuntoCount = {};
-    errors.forEach(e => {
+    filteredErrors.forEach(e => {
         assuntoCount[e.assunto] = (assuntoCount[e.assunto] || 0) + 1;
     });
+
+    // Calcular total para porcentagens
+    const total = filteredErrors.length;
 
     // Pegar top 10 assuntos
     const sorted = Object.entries(assuntoCount)
@@ -291,9 +335,31 @@ function updateAssuntosChart() {
 
     const labels = sorted.map(s => s[0]);
     const data = sorted.map(s => s[1]);
+    const percentages = sorted.map(s => ((s[1] / total) * 100).toFixed(1));
 
     if (charts.assuntos) {
         charts.assuntos.destroy();
+    }
+
+    // Se nao houver materia selecionada, mostrar mensagem
+    if (!filterMateria) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '16px system-ui, sans-serif';
+        ctx.fillStyle = '#6b7280';
+        ctx.textAlign = 'center';
+        ctx.fillText('Selecione uma materia para ver os assuntos', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        charts.assuntos = null;
+        return;
+    }
+
+    if (data.length === 0) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '16px system-ui, sans-serif';
+        ctx.fillStyle = '#6b7280';
+        ctx.textAlign = 'center';
+        ctx.fillText('Nenhum erro registrado para esta materia', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        charts.assuntos = null;
+        return;
     }
 
     charts.assuntos = new Chart(ctx, {
@@ -303,7 +369,7 @@ function updateAssuntosChart() {
             datasets: [{
                 label: 'Erros',
                 data: data,
-                backgroundColor: CHART_COLORS[0],
+                backgroundColor: CHART_COLORS.slice(0, data.length),
                 borderRadius: 4
             }]
         },
@@ -313,6 +379,15 @@ function updateAssuntosChart() {
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `Erros: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             },
             scales: {
@@ -320,6 +395,13 @@ function updateAssuntosChart() {
                     beginAtZero: true,
                     ticks: {
                         stepSize: 1
+                    }
+                },
+                y: {
+                    ticks: {
+                        callback: function(value, index) {
+                            return `${labels[index]} (${percentages[index]}%)`;
+                        }
                     }
                 }
             }
@@ -337,20 +419,19 @@ function updateTimelineChart() {
         filteredErrors = errors.filter(e => e.materia === filterMateria);
     }
 
-    // Agrupar por mes/ano
+    // Agrupar por ano
     const timelineData = {};
     filteredErrors.forEach(e => {
-        const key = `${e.ano}-${String(e.mes).padStart(2, '0')}`;
+        const key = String(e.ano);
         timelineData[key] = (timelineData[key] || 0) + 1;
     });
 
-    // Ordenar por data
+    // Calcular total para porcentagens
+    const total = filteredErrors.length;
+
+    // Ordenar por ano
     const sortedKeys = Object.keys(timelineData).sort();
-    const labels = sortedKeys.map(k => {
-        const [ano, mes] = k.split('-');
-        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        return `${meses[parseInt(mes) - 1]}/${ano}`;
-    });
+    const labels = sortedKeys;
     const data = sortedKeys.map(k => timelineData[k]);
 
     if (charts.timeline) {
@@ -377,6 +458,15 @@ function updateTimelineChart() {
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const value = context.raw;
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `Erros: ${value} (${percentage}% do periodo)`;
+                        }
+                    }
                 }
             },
             scales: {

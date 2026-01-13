@@ -37,26 +37,9 @@
                             <datalist id="provas-list"></datalist>
                         </div>
                         <div class="form-group">
-                            <label for="mes">Mes</label>
-                            <select id="mes" required>
-                                <option value="">Selecione</option>
-                                <option value="1">Janeiro</option>
-                                <option value="2">Fevereiro</option>
-                                <option value="3">Marco</option>
-                                <option value="4">Abril</option>
-                                <option value="5">Maio</option>
-                                <option value="6">Junho</option>
-                                <option value="7">Julho</option>
-                                <option value="8">Agosto</option>
-                                <option value="9">Setembro</option>
-                                <option value="10">Outubro</option>
-                                <option value="11">Novembro</option>
-                                <option value="12">Dezembro</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
                             <label for="ano">Ano</label>
-                            <input type="number" id="ano" required min="2020" max="2030" placeholder="2024">
+                            <input type="number" id="ano" list="anos-list" required min="2020" max="2030" placeholder="2024">
+                            <datalist id="anos-list"></datalist>
                         </div>
                     </div>
                     <button type="submit" class="btn-primary">Adicionar Erro</button>
@@ -86,10 +69,16 @@
                     </div>
                     <div class="chart-container">
                         <h3>Erros por Assunto</h3>
+                        <div class="chart-filter">
+                            <label for="filter-assunto-materia">Filtrar por materia:</label>
+                            <select id="filter-assunto-materia">
+                                <option value="">Selecione uma materia</option>
+                            </select>
+                        </div>
                         <canvas id="chart-assuntos"></canvas>
                     </div>
                     <div class="chart-container chart-wide">
-                        <h3>Erros por Mes/Ano</h3>
+                        <h3>Erros por Ano</h3>
                         <div class="chart-filter">
                             <label for="filter-materia">Filtrar por materia:</label>
                             <select id="filter-materia">
